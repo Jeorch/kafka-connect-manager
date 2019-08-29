@@ -18,12 +18,12 @@ func TestRegisterConnector(t *testing.T) {
 	//log config
 	_ = os.Setenv("LOGGER_DEBUG", "true")
 
-	tag := "tm"
-	connector := "tm-002"
+	tag := "TM"
+	connector := "TM002"
 	config := `{
         "connector.class": "org.apache.kafka.connect.file.FileStreamSourceConnector",
         "tasks.max": "1",
-        "topic": "tm-source-002",
+        "topic": "TM-source-002",
         "file": "/usr/share/logs-path/test2222222.txt"
     }`
 
@@ -44,7 +44,7 @@ func TestListAllConnectors(t *testing.T) {
 	//log config
 	_ = os.Setenv("LOGGER_DEBUG", "true")
 
-	tag := "tm"
+	tag := "TM"
 	connectors, err := ListAllConnectors(tag)
 	bmerror.PanicError(err)
 	bmlog.StandardLogger().Info(connectors)
@@ -62,7 +62,7 @@ func TestAvailableConnectors(t *testing.T) {
 	//log config
 	_ = os.Setenv("LOGGER_DEBUG", "true")
 
-	tag := "tm"
+	tag := "TM"
 	connectors, err := AvailableConnectors(tag)
 	bmerror.PanicError(err)
 	bmlog.StandardLogger().Info(connectors)
@@ -79,11 +79,11 @@ func TestResumeConnector(t *testing.T) {
 	//log config
 	_ = os.Setenv("LOGGER_DEBUG", "true")
 
-	connector := "tm-002"
+	connector := "TM-002"
 	config := `{
         "connector.class": "org.apache.kafka.connect.file.FileStreamSourceConnector",
         "tasks.max": "1",
-        "topic": "tm-source-002",
+        "topic": "TM-source-002",
         "file": "/usr/share/logs-path/test33333.txt"
     }`
 
@@ -102,7 +102,7 @@ func TestReleaseConnector(t *testing.T) {
 	_ = os.Setenv("BM_REDIS_DB", "0")
 	//log config
 	_ = os.Setenv("LOGGER_DEBUG", "true")
-	connector := "tm-002"
+	connector := "TM-002"
 
 	err := ReleaseConnector(connector)
 	bmerror.PanicError(err)
@@ -120,8 +120,8 @@ func TestRemoveConnector(t *testing.T) {
 	//log config
 	_ = os.Setenv("LOGGER_DEBUG", "true")
 
-	tag := "tm"
-	connector := "tm-001"
+	tag := "TM"
+	connector := "TM-001"
 
 	err := RemoveConnector(tag, connector)
 	bmerror.PanicError(err)

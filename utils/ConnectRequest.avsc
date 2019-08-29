@@ -1,0 +1,18 @@
+{
+  "type": "record",
+  "name": "ConnectRequest",
+  "namespace": "com.pharbers.kafka.schema",
+  "fields": [{
+    "name": "JobId",
+    "type": "string"
+  }, {
+    "name": "Tag",
+    "type": "string"
+  }, {
+    "name": "SourceConfig",
+    "type": "string"
+  }, {
+    "name": "SinkConfig",
+    "type": "string"
+  }]
+}

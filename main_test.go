@@ -6,7 +6,6 @@ import (
 	"github.com/PharbersDeveloper/kafka-connect-manager/utils"
 	"github.com/alfredyang1986/blackmirror/bmerror"
 	"github.com/alfredyang1986/blackmirror/bmkafka"
-	"github.com/alfredyang1986/blackmirror/bmlog"
 	"github.com/elodina/go-avro"
 	kafkaAvro "github.com/elodina/go-kafka-avro"
 	"os"
@@ -41,19 +40,20 @@ func TestSendConnectRequest(t *testing.T) {
 
 	fields = append(fields,
 		map[string]interface{}{
-			"name" : "jobId",
+			"name" : "JobId",
 			"type" : "string",
 		},
 		map[string]interface{}{
-			"name" : "tag",
+			"name" : "Tag",
 			"type" : "string",
 		},
 		map[string]interface{}{
-			"name" : "configs",
-			"type" : map[string]interface{}{
-				"type" : "array",
-				"items" : "string",
-			},
+			"name" : "SourceConfig",
+			"type" : "string",
+		},
+		map[string]interface{}{
+			"name" : "SinkConfig",
+			"type" : "string",
 		},
 	)
 
@@ -64,17 +64,13 @@ func TestSendConnectRequest(t *testing.T) {
 		Fields:    fields,
 	}
 
-	//var rawMetricsSchema = `{"type": "record","name": "ConnectRequest","namespace": "com.pharbers.kafka.schema","fields": [{"name": "jobId", "type": "string"},{"name": "tag", "type": "string"},{"name": "configs", "type": "{\"type\": \"array\", \"items\": \"string\"}"}]}`
 	schemaByte, err := json.Marshal(schemaConnectRequest)
 	rawMetricsSchema := string(schemaByte)
 	bmerror.PanicError(err)
 
 	tmpTopic := jobId
-	bmlog.StandardLogger().Infof("jobId=%s", jobId)
-	bmlog.StandardLogger().Infof("tmpTopic=%s", tmpTopic)
-	tag := "tm"
-	configs := []string{
-		fmt.Sprintf(`{
+	tag := "TM"
+	sourceConfig := fmt.Sprintf(`{
 	"connector.class": "com.pharbers.kafka.connect.mongodb.MongodbSourceConnector",
 	"tasks.max": "1",
 	"job": "%s",
@@ -83,8 +79,8 @@ func TestSendConnectRequest(t *testing.T) {
 	"database": "test",
 	"collection": "PhAuth",
 	"filter": "{}"
-}`, jobId, tmpTopic),
-		fmt.Sprintf(`{
+}`, jobId, tmpTopic)
+	sinkConfig := fmt.Sprintf(`{
   	"jobId": "%s",
 	"topics": "%s",
   	"connector.class": "com.pharbers.kafka.connect.elasticsearch.ElasticsearchSinkConnector",
@@ -94,17 +90,17 @@ func TestSendConnectRequest(t *testing.T) {
   	"type.name": "",
   	"read.timeout.ms": "10000",
   	"connection.timeout.ms": "5000"
-}`, jobId, tmpTopic),
-	}
+}`, jobId, tmpTopic)
 
 	encoder := kafkaAvro.NewKafkaAvroEncoder(schemaRepositoryUrl)
 	schema, err := avro.ParseSchema(rawMetricsSchema)
 	bmerror.PanicError(err)
 	record := avro.NewGenericRecord(schema)
 	bmerror.PanicError(err)
-	record.Set("jobId", jobId)
-	record.Set("tag", tag)
-	record.Set("configs", configs)
+	record.Set("JobId", jobId)
+	record.Set("Tag", tag)
+	record.Set("SourceConfig", sourceConfig)
+	record.Set("SinkConfig", sinkConfig)
 	recordByteArr, err := encoder.Encode(record)
 	bmerror.PanicError(err)
 

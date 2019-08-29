@@ -5,6 +5,10 @@ import (
 	"github.com/PharbersDeveloper/kafka-connect-manager/storage"
 )
 
+type Manager struct {
+	jobConnectors map[string][]string
+}
+
 func RegisterConnector(tag string, connector string, config string) (err error) {
 	err = operations.PutConnector(connector, config)
 	if err != nil {

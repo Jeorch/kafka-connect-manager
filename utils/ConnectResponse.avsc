@@ -1,0 +1,15 @@
+{
+  "type": "record",
+  "name": "ConnectResponse",
+  "namespace": "com.pharbers.kafka.schema",
+  "fields": [{
+    "name": "JobId",
+    "type": "string"
+  }, {
+    "name": "Progress",
+    "type": "long"
+  }, {
+    "name": "Error",
+    "type": "string"
+  }]
+}
