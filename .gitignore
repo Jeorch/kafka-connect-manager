@@ -1,0 +1,6 @@
+.idea/
+.git/
+kafka-secrets/
+
+# Mac OSX specific
+.DS_Store
