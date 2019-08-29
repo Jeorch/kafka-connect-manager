@@ -1,6 +1,8 @@
 package main
 
 import (
+	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/PharbersDeveloper/kafka-connect-manager/manager"
 	"github.com/alfredyang1986/blackmirror/bmerror"
@@ -9,12 +11,23 @@ import (
 	"github.com/elodina/go-avro"
 	kafkaAvro "github.com/elodina/go-kafka-avro"
 	"os"
+	"strings"
 	"time"
 )
 
 func main() {
 	fmt.Println("kafka_connect_manager start")
 
+	//connect config
+	_ = os.Setenv("BP_KAFKA_CONNECT_URL", "http://192.168.100.176:8083")
+	//redis config
+	_ = os.Setenv("BM_REDIS_HOST", "192.168.100.176")
+	_ = os.Setenv("BM_REDIS_PORT", "6379")
+	_ = os.Setenv("BM_REDIS_PASS", "")
+	_ = os.Setenv("BM_REDIS_DB", "0")
+	//log config
+	_ = os.Setenv("LOGGER_DEBUG", "true")
+	//kafka config
 	_ = os.Setenv("BM_KAFKA_BROKER", "123.56.179.133:9092")
 	_ = os.Setenv("BM_KAFKA_SCHEMA_REGISTRY_URL", "http://123.56.179.133:8081")
 	_ = os.Setenv("BM_KAFKA_CONSUMER_GROUP", "test20190828")
@@ -27,18 +40,37 @@ func main() {
 	if err != nil {
 		panic(err.Error())
 	}
-	topics := []string{"connect-request"}
+	topics := []string{"ConnectRequest"}
 	bkc.SubscribeTopics(topics, dealConnectRequest)
 
 }
 
 func dealConnectRequest(a interface{}) {
-	fmt.Println("dealConnectRequest => ", a)
-	//go applyConnector(jobID, tag, configs)
+
+	var schemaRepositoryUrl = os.Getenv("BM_KAFKA_SCHEMA_REGISTRY_URL")
+	decoder := kafkaAvro.NewKafkaAvroDecoder(schemaRepositoryUrl)
+	decodeData, err := decoder.Decode(a.([]byte))
+	record := decodeData.(*avro.GenericRecord)
+	bmerror.PanicError(err)
+	fmt.Println("ConnectRequest => ", record)
+
+	jobId := record.Get("jobId").(string)
+	tag := record.Get("tag").(string)
+	configs := record.Get("configs").([]interface{})
+	configsStr := make([]string, 0)
+	for _, config := range configs {
+		if cs, ok := config.(string); ok {
+			configsStr = append(configsStr, cs)
+		}
+	}
+
+	go applyConnector(jobId, tag, configsStr)
 	fmt.Println("dealConnectRequest DONE!")
 }
 
-func applyConnector(jobID string, tag string, configs []string) (err error) {
+func applyConnector(jobId string, tag string, configs []string) (err error) {
+
+	bmlog.StandardLogger().Infof("jobId=%s, tag=%s, configs=%v", jobId, tag, configs)
 
 	if len(configs) < 2 {
 		bmlog.StandardLogger().Error("未收到一组管道配置")
@@ -65,34 +97,58 @@ func applyConnector(jobID string, tag string, configs []string) (err error) {
 		bmerror.PanicError(err)
 	}
 
-	doMonitor(jobID)
+	var configMap map[string]interface{}
+	if err := json.Unmarshal([]byte(configs[0]), &configMap); err != nil {
+		return err
+	}
+
+	connectorName := fmt.Sprintf("%s$$%s", availableConnectors[0], availableConnectors[1])
+	sourceTopic := ""
+	recallTopic := fmt.Sprintf("recall_%s", jobId)
+	strategy := "default"
+
+	if topic, ok := configMap["topic"]; ok {
+		sourceTopic = topic.(string)
+	} else if topics, ok := configMap["topics"]; ok {
+		sourceTopic = topics.(string)
+	} else {
+		bmerror.PanicError(errors.New("no topic found in config"))
+	}
+
+	doMonitor(jobId, connectorName, sourceTopic, recallTopic, strategy)
 	
 	return
 }
 
-func doMonitor(jobID string)  {
+func doMonitor(jobId string, connectorName string, sourceTopic string, recallTopic string, strategy string)  {
 
-	sendMonitorRequest(jobID)
+	bmlog.StandardLogger().Info("*** doMonitor ***")
+	sendMonitorRequest2(jobId, connectorName, sourceTopic, recallTopic, strategy)
 
 	bkc, err := bmkafka.GetConfigInstance()
 	if err != nil {
 		panic(err.Error())
 	}
-	topics := []string{"MonitorResponse"}
-	bkc.SubscribeTopics(topics, dealMonitorResponse)
+	topics := []string{"MonitorResponse2"}
+	bkc.SubscribeTopics(topics, dealMonitorResponse2)
 }
 
-func sendMonitorRequest(jobID string) {
+func sendMonitorRequest2(jobId string, connectorName string, sourceTopic string, recallTopic string, strategy string) {
 
+	bmlog.StandardLogger().Info("*** sendMonitorRequest2 ***")
 	var schemaRepositoryUrl = os.Getenv("BM_KAFKA_SCHEMA_REGISTRY_URL")
-	var rawMetricsSchema = `{"type": "record","name": "MonitorRequest","namespace": "com.pharbers.kafka.schema","fields": [{"name": "jobID", "type": "string"}]}`
+	var rawMetricsSchema = `{"type": "record","name": "MonitorRequest2","namespace": "com.pharbers.kafka.schema","fields": [{"name": "jobId", "type": "string"},{"name": "connectorName", "type": "string"},{"name": "sourceTopic", "type": "string"},{"name": "recallTopic", "type": "string"},{"name": "strategy", "type": "string"}]}`
 
 	encoder := kafkaAvro.NewKafkaAvroEncoder(schemaRepositoryUrl)
 	schema, err := avro.ParseSchema(rawMetricsSchema)
 	bmerror.PanicError(err)
 	record := avro.NewGenericRecord(schema)
 	bmerror.PanicError(err)
-	record.Set("jobID", jobID)
+	record.Set("jobId", jobId)
+	record.Set("connectorName", connectorName)
+	record.Set("sourceTopic", sourceTopic)
+	record.Set("recallTopic", recallTopic)
+	record.Set("strategy", strategy)
 	recordByteArr, err := encoder.Encode(record)
 	bmerror.PanicError(err)
 
@@ -100,24 +156,67 @@ func sendMonitorRequest(jobID string) {
 	if err != nil {
 		panic(err.Error())
 	}
-	topic := "MonitorRequest"
+	topic := "MonitorRequest2"
 	bkc.Produce(&topic, recordByteArr)
 
 }
 
-func dealMonitorResponse(a interface{}) {
-	fmt.Println("dealMonitorResponse => ", a)
+func dealMonitorResponse2(a interface{}) {
 
+	bmlog.StandardLogger().Info("*** dealMonitorResponse2 ***")
 	var schemaRepositoryUrl = os.Getenv("BM_KAFKA_SCHEMA_REGISTRY_URL")
 	decoder := kafkaAvro.NewKafkaAvroDecoder(schemaRepositoryUrl)
-	record, err := decoder.Decode(a.([]byte))
+	decodeData, err := decoder.Decode(a.([]byte))
+	record := decodeData.(*avro.GenericRecord)
 	bmerror.PanicError(err)
-	fmt.Println("MonitorResponse => ", record.(*avro.GenericRecord))
+	fmt.Println("MonitorResponse2 => ", record)
 
-	//replyFunc(jobID)
-	fmt.Println("dealConnectRequest DONE!")
+	jobId := record.Get("jobId").(string)
+	progress := record.Get("progress").(int64)
+	connectorName := record.Get("connectorName").(string)
+	error := record.Get("error").(string)
+
+	if error != "" {
+		bmerror.PanicError(errors.New(error))
+	}
+
+	if progress == 100 {
+		connectors := strings.Split(connectorName, "$$")
+		err = manager.ReleaseConnector(connectors[0])
+		bmerror.PanicError(err)
+		err = manager.ReleaseConnector(connectors[1])
+		bmerror.PanicError(err)
+	}
+
+	bmlog.StandardLogger().Infof("jobId=%s, progress=%d, connectorName=%s, error=%s", jobId, progress, connectorName, error)
+
+	replyFunc(jobId, progress)
+	fmt.Println("dealMonitorResponse2 DONE!")
 }
 
-func replyFunc(jobID string)  {
+func replyFunc(jobId string, progress int64)  {
+
+	bmlog.StandardLogger().Info("*** replyFunc *** ", jobId, " => ", progress)
+	var schemaRepositoryUrl = os.Getenv("BM_KAFKA_SCHEMA_REGISTRY_URL")
+	var rawMetricsSchema = `{"type": "record","name": "ConnectResponse","namespace": "com.pharbers.kafka.schema","fields": [{"name": "jobId", "type": "string"},{"name": "progress", "type": "long"}]}`
+
+	encoder := kafkaAvro.NewKafkaAvroEncoder(schemaRepositoryUrl)
+	schema, err := avro.ParseSchema(rawMetricsSchema)
+	bmerror.PanicError(err)
+	record := avro.NewGenericRecord(schema)
+	bmerror.PanicError(err)
+	record.Set("jobId", jobId)
+	record.Set("progress", progress)
+	recordByteArr, err := encoder.Encode(record)
+	bmerror.PanicError(err)
+
+	bkc, err := bmkafka.GetConfigInstance()
+	if err != nil {
+		panic(err.Error())
+	}
+	topic := "ConnectResponse"
+	bkc.Produce(&topic, recordByteArr)
+
+	//Todo release connector
 
 }
