@@ -28,9 +28,9 @@ func main() {
 	_ = os.Setenv("BM_KAFKA_SSL_KEY_LOCATION", "/Users/jeorch/kit/kafka-secrets/kafkacat.client.key")
 	_ = os.Setenv("BM_KAFKA_SSL_PASS", "pharbers")
 
-	manager := new(manager.Manager)
-	go manager.DealConnectRequest()
-	go manager.DealMonitorResponse()
+	mg := new(manager.Manager)
+	go mg.DealConnectRequest()
+	go mg.DealMonitorResponse()
 
 	//TODO: RegisterConnectorPlugin(),上传新jar包，重启connect服务器等管理功能
 	router := gin.Default()
@@ -39,6 +39,6 @@ func main() {
 			"message": "pong",
 		})
 	})
-	router.Run(":8080")
+	_ = router.Run(":8080")
 
 }

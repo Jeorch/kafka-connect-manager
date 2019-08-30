@@ -3,7 +3,7 @@ package main
 import (
 	"encoding/json"
 	"fmt"
-	"github.com/PharbersDeveloper/kafka-connect-manager/utils"
+	"github.com/PharbersDeveloper/kafka-connect-manager/schema"
 	"github.com/alfredyang1986/blackmirror/bmerror"
 	"github.com/alfredyang1986/blackmirror/bmkafka"
 	"github.com/elodina/go-avro"
@@ -57,7 +57,7 @@ func TestSendConnectRequest(t *testing.T) {
 		},
 	)
 
-	schemaConnectRequest := utils.Schema{
+	schemaConnectRequest := schema.Schema{
 		Type:      "record",
 		Name:      "ConnectRequest",
 		Namespace: "com.pharbers.kafka.schema",

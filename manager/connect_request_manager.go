@@ -25,24 +25,27 @@ func (m *Manager) DealConnectRequest() {
 
 func (m *Manager) dealConnectRequestFunc(a interface{}) {
 
-	var schemaRepositoryUrl = os.Getenv("BM_KAFKA_SCHEMA_REGISTRY_URL")
-	decoder := kafkaAvro.NewKafkaAvroDecoder(schemaRepositoryUrl)
-	decodeData, err := decoder.Decode(a.([]byte))
-	record := decodeData.(*avro.GenericRecord)
-	bmerror.PanicError(err)
-	fmt.Println("ConnectRequest => ", record)
+	go func() {
+		var schemaRepositoryUrl = os.Getenv("BM_KAFKA_SCHEMA_REGISTRY_URL")
+		decoder := kafkaAvro.NewKafkaAvroDecoder(schemaRepositoryUrl)
+		decodeData, err := decoder.Decode(a.([]byte))
+		record := decodeData.(*avro.GenericRecord)
+		bmerror.PanicError(err)
+		bmlog.StandardLogger().Infof("ConnectRequest => %v", record)
 
-	jobId := record.Get("JobId").(string)
-	tag := record.Get("Tag").(string)
-	sourceConfig := record.Get("SourceConfig").(string)
-	sinkConfig := record.Get("SinkConfig").(string)
+		jobId := record.Get("JobId").(string)
+		tag := record.Get("Tag").(string)
+		sourceConfig := record.Get("SourceConfig").(string)
+		sinkConfig := record.Get("SinkConfig").(string)
 
-	go m.applyConnector(jobId, tag, sourceConfig, sinkConfig)
+		go m.applyConnector(jobId, tag, sourceConfig, sinkConfig)
+	}()
+
 }
 
 func (m *Manager) applyConnector(jobId string, tag string, sourceConfig string, sinkConfig string) {
 
-	bmlog.StandardLogger().Infof("jobId=%s, tag=%s", jobId, tag)
+	bmlog.StandardLogger().Infof("applyConnector => jobId=%s, tag=%s", jobId, tag)
 
 	availableConnectors, err := AvailableConnectors(tag)
 	bmerror.PanicError(err)
@@ -88,14 +91,14 @@ func (m *Manager) applyConnector(jobId string, tag string, sourceConfig string, 
 		bmerror.PanicError(errors.New("no topic found in config"))
 	}
 
-	sendMonitorRequest2(jobId, connectorName, sourceTopic, recallTopic, strategy)
+	go sendMonitorRequest2(jobId, connectorName, sourceTopic, recallTopic, strategy)
 
 	return
 }
 
-func replyFunc(jobId string, progress int64, error string)  {
+func sendConnectResponse(jobId string, progress int64, error string)  {
 
-	bmlog.StandardLogger().Info("*** replyFunc *** ", jobId, " => ", progress)
+	bmlog.StandardLogger().Infof("sendConnectResponse => jobId=%s， progress=%d", jobId, progress)
 	var schemaRepositoryUrl = os.Getenv("BM_KAFKA_SCHEMA_REGISTRY_URL")
 	var rawMetricsSchema = `{"type": "record","name": "ConnectResponse","namespace": "com.pharbers.kafka.schema","fields": [{"name": "JobId", "type": "string"},{"name": "Progress", "type": "long"},{"name": "Error", "type": "string"}]}`
 
@@ -108,12 +111,15 @@ func replyFunc(jobId string, progress int64, error string)  {
 	record.Set("Progress", progress)
 	record.Set("Error", error)
 	recordByteArr, err := encoder.Encode(record)
-	bmerror.PanicError(err)
+	if err != nil {
+		bmlog.StandardLogger().Errorf("%v", err)
+	}
 
 	bkc, err := bmkafka.GetConfigInstance()
 	if err != nil {
-		panic(err.Error())
+		bmlog.StandardLogger().Errorf("%v", err)
 	}
 	topic := "ConnectResponse"
 	bkc.Produce(&topic, recordByteArr)
+	bmlog.StandardLogger().Infof("*** Send ConnectResponse *** jobId=%s， progress=%d, succeed !!", jobId, progress)
 }

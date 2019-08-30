@@ -24,14 +24,14 @@ func GetStatus(connector string) (status string, err error) {
 	res, _ := http.DefaultClient.Do(req)
 	fmt.Println(res)
 	defer res.Body.Close()
+	body, _ := ioutil.ReadAll(res.Body)
 
 	if res.StatusCode != 200 {
 		status = "ERROR"
-		err = errors.New("HTTP error : " + fmt.Sprint(res))
+		err = errors.New("HTTP error : " + string(body))
 		return
 	}
 
-	body, _ := ioutil.ReadAll(res.Body)
 	statusRes := new(StatusResponse)
 	err = json.Unmarshal(body, statusRes)
 
@@ -50,13 +50,13 @@ func SetStatus(connector string, status string) (err error) {
 	res, _ := http.DefaultClient.Do(req)
 	fmt.Println(res)
 	defer res.Body.Close()
+	body, _ := ioutil.ReadAll(res.Body)
 
 	if res.StatusCode != 202 {
-		err = errors.New("HTTP error : " + fmt.Sprint(res))
+		err = errors.New("HTTP error : " + string(body))
 		return
 	}
 
-	body, _ := ioutil.ReadAll(res.Body)
 	fmt.Println(string(body))
 
 	return

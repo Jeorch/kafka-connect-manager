@@ -33,3 +33,23 @@ func SetConfig(connector string, config string) (err error) {
 
 	return
 }
+
+func GetConfig(connector string) (config string, err error) {
+	url := os.Getenv("BP_KAFKA_CONNECT_URL") + fmt.Sprint("/connectors/", connector, "/config")
+
+	req, _ := http.NewRequest("GET", url, nil)
+
+	res, _ := http.DefaultClient.Do(req)
+	fmt.Println(res)
+	defer res.Body.Close()
+	body, _ := ioutil.ReadAll(res.Body)
+
+	if res.StatusCode != 200 {
+		config = ""
+		err = errors.New("HTTP error : " + string(body))
+		return
+	}
+
+	config = string(body)
+	return
+}

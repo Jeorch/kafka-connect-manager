@@ -8,7 +8,6 @@ import (
 	"github.com/elodina/go-avro"
 	kafkaAvro "github.com/elodina/go-kafka-avro"
 	"os"
-	"strings"
 )
 
 func (m *Manager) DealMonitorResponse() {
@@ -24,47 +23,41 @@ func (m *Manager) DealMonitorResponse() {
 func (m *Manager) dealMonitorResponse2(a interface{}) {
 
 	bmlog.StandardLogger().Info("*** dealMonitorResponse2 ***")
-	var schemaRepositoryUrl = os.Getenv("BM_KAFKA_SCHEMA_REGISTRY_URL")
-	decoder := kafkaAvro.NewKafkaAvroDecoder(schemaRepositoryUrl)
-	decodeData, err := decoder.Decode(a.([]byte))
-	record := decodeData.(*avro.GenericRecord)
-	bmerror.PanicError(err)
-	fmt.Println("MonitorResponse2 => ", record)
 
-	jobId := record.Get("jobId").(string)
-	if m.jobConnectors[jobId] != nil {
-		progress := record.Get("progress").(int64)
-		connectorName := record.Get("connectorName").(string)
-		error := record.Get("error")
-
-		if progress == -1 {
-			bmlog.StandardLogger().Info("monitor error")
-			replyFunc(jobId, progress, fmt.Sprintf("%v", error))
-			bmlog.StandardLogger().Errorf("%v", error)
+	go func() {
+		var schemaRepositoryUrl = os.Getenv("BM_KAFKA_SCHEMA_REGISTRY_URL")
+		decoder := kafkaAvro.NewKafkaAvroDecoder(schemaRepositoryUrl)
+		decodeData, err := decoder.Decode(a.([]byte))
+		if err != nil {
+			bmlog.StandardLogger().Errorf("%v", err)
 		}
+		record := decodeData.(*avro.GenericRecord)
+		bmlog.StandardLogger().Infof("MonitorResponse2 => %s", record)
 
-		if error != nil && error != "" {
-			bmlog.StandardLogger().Info("monitor error")
-			replyFunc(jobId, progress, fmt.Sprintf("%v", error))
-			bmlog.StandardLogger().Errorf("%v", error)
+		jobId := record.Get("jobId").(string)
+		if m.jobConnectors[jobId] != nil {
+			progress := record.Get("progress").(int64)
+			connectorName := record.Get("connectorName").(string)
+			monitorError := record.Get("error")
+
+			switch progress {
+			case -1:
+				bmlog.StandardLogger().Infof("jobId=%s, progress=%d, connectorName=%s, error=%v", jobId, progress, connectorName, monitorError)
+				bmlog.StandardLogger().Info("monitor error")
+				bmlog.StandardLogger().Errorf("%v", monitorError)
+			case 100:
+				bmlog.StandardLogger().Infof("jobId=%s, progress=%d, connectorName=%s, error=%v", jobId, progress, connectorName, monitorError)
+				go sendConnectResponse(jobId, progress, fmt.Sprintf("%v", monitorError))
+				err = m.ReleaseJobConnectors(jobId)
+				if err != nil {
+					bmlog.StandardLogger().Errorf("未能成功释放jobId=%s的管道，原因是=>%v", jobId, err)
+				}
+			default:
+				bmlog.StandardLogger().Infof("jobId=%s, progress=%d, connectorName=%s, error=%v", jobId, progress, connectorName, monitorError)
+			}
+
 		}
-
-		if progress == 100 {
-			connectors := strings.Split(connectorName, "$$")
-			err = ReleaseConnector(connectors[0])
-			replyFunc(jobId, progress, fmt.Sprintf("%v", error))
-			bmlog.StandardLogger().Errorf("%v", error)
-			err = ReleaseConnector(connectors[1])
-			replyFunc(jobId, progress, fmt.Sprintf("%v", error))
-			bmlog.StandardLogger().Errorf("%v", error)
-			delete(m.jobConnectors, jobId)
-		}
-
-		bmlog.StandardLogger().Infof("jobId=%s, progress=%d, connectorName=%s, error=%s", jobId, progress, connectorName, error)
-
-		replyFunc(jobId, progress, fmt.Sprintf("%v", error))
-		fmt.Println("dealMonitorResponse2 DONE!")
-	}
+	}()
 
 }
 
