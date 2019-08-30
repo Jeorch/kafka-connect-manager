@@ -1,4 +1,4 @@
-package utils
+package schema
 
 type Schema struct {
 	Type string `json:"type"`
