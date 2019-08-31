@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	schema2 "github.com/PharbersDeveloper/kafka-connect-manager/schema"
 	"github.com/alfredyang1986/blackmirror/bmerror"
 	"github.com/alfredyang1986/blackmirror/bmkafka"
 	"github.com/alfredyang1986/blackmirror/bmlog"
@@ -51,7 +52,8 @@ func (m *Manager) applyConnector(jobId string, tag string, sourceConfig string, 
 	bmerror.PanicError(err)
 
 	for len(availableConnectors)<2 {
-		bmlog.StandardLogger().Warn(fmt.Sprintf("可用管道数量小于2，目前标签为%s的可用管道数量为%d，排队等待，每2秒轮询一次", tag, len(availableConnectors)))
+		bmlog.StandardLogger().Warnf("可用管道数量小于2，目前标签为%s的可用管道数量为%d，排队等待，每2秒轮询一次", tag, len(availableConnectors))
+		bmlog.StandardLogger().Warnf("当前jobConnectors=%v", m.jobConnectors)
 		time.Sleep(2 * time.Second)
 		availableConnectors, err = AvailableConnectors(tag)
 		bmerror.PanicError(err)
@@ -71,24 +73,42 @@ func (m *Manager) applyConnector(jobId string, tag string, sourceConfig string, 
 	if  m.jobConnectors == nil{
 		m.jobConnectors = make(map[string][]string)
 	}
-	m.jobConnectors[jobId] = []string{availableConnectors[0], availableConnectors[1]}
+	if m.jobConnectors[jobId] == nil {
+		m.jobConnectors[jobId] = []string{availableConnectors[0], availableConnectors[1]}
+	} else {
+		m.jobConnectors[jobId] = append(m.jobConnectors[jobId], availableConnectors[0], availableConnectors[1])
+	}
 
-	var configMap map[string]interface{}
-	if err := json.Unmarshal([]byte(sourceConfig), &configMap); err != nil {
+
+	var sourceConfigMap map[string]interface{}
+	if err := json.Unmarshal([]byte(sourceConfig), &sourceConfigMap); err != nil {
+		panic(err.Error())
+	}
+
+	var sinkConfigMap map[string]interface{}
+	if err := json.Unmarshal([]byte(sinkConfig), &sinkConfigMap); err != nil {
 		panic(err.Error())
 	}
 
 	connectorName := fmt.Sprintf("%s$$%s", availableConnectors[0], availableConnectors[1])
-	sourceTopic := ""
-	recallTopic := fmt.Sprintf("recall_%s", jobId)
+	var sourceTopic string
+	var recallTopic string
 	strategy := "default"
 
-	if topic, ok := configMap["topic"]; ok {
+	if topic, ok := sourceConfigMap["topic"]; ok {
 		sourceTopic = topic.(string)
-	} else if topics, ok := configMap["topics"]; ok {
+	} else if topics, ok := sourceConfigMap["topics"]; ok {
 		sourceTopic = topics.(string)
 	} else {
-		bmerror.PanicError(errors.New("no topic found in config"))
+		bmerror.PanicError(errors.New("no topic found in sourceConfigMap"))
+	}
+
+	if sinkJobID, ok := sinkConfigMap["jobId"]; ok {
+		recallTopic = "recall_" +sinkJobID.(string)
+	} else if sinkJobID, ok := sinkConfigMap["job"]; ok {
+		recallTopic = "recall_" +sinkJobID.(string)
+	} else {
+		bmerror.PanicError(errors.New("no jobId found in sinkConfigMap"))
 	}
 
 	go sendMonitorRequest2(jobId, connectorName, sourceTopic, recallTopic, strategy)
@@ -96,20 +116,27 @@ func (m *Manager) applyConnector(jobId string, tag string, sourceConfig string, 
 	return
 }
 
-func sendConnectResponse(jobId string, progress int64, error string)  {
+func sendConnectResponse(jobId string, progress int64, status string, msg string)  {
 
-	bmlog.StandardLogger().Infof("sendConnectResponse => jobId=%s， progress=%d", jobId, progress)
+	bmlog.StandardLogger().Infof("sendConnectResponse => jobId=%s, progress=%d, status=%s， msg=%d", jobId, progress, status, msg)
 	var schemaRepositoryUrl = os.Getenv("BM_KAFKA_SCHEMA_REGISTRY_URL")
-	var rawMetricsSchema = `{"type": "record","name": "ConnectResponse","namespace": "com.pharbers.kafka.schema","fields": [{"name": "JobId", "type": "string"},{"name": "Progress", "type": "long"},{"name": "Error", "type": "string"}]}`
+	connectResponse := schema2.ConnectResponse{
+		JobId:    jobId,
+		Progress: progress,
+		Status:   status,
+		Message:  msg,
+	}
+	var rawMetricsSchema = connectResponse.Schema()
 
 	encoder := kafkaAvro.NewKafkaAvroEncoder(schemaRepositoryUrl)
 	schema, err := avro.ParseSchema(rawMetricsSchema)
 	bmerror.PanicError(err)
 	record := avro.NewGenericRecord(schema)
 	bmerror.PanicError(err)
-	record.Set("JobId", jobId)
-	record.Set("Progress", progress)
-	record.Set("Error", error)
+	record.Set("JobId", connectResponse.JobId)
+	record.Set("Progress", connectResponse.Progress)
+	record.Set("Status", connectResponse.Status)
+	record.Set("Message", connectResponse.Message)
 	recordByteArr, err := encoder.Encode(record)
 	if err != nil {
 		bmlog.StandardLogger().Errorf("%v", err)

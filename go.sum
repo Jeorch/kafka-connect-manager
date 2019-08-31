@@ -1,7 +1,7 @@
 github.com/actgardner/gogen-avro v6.1.0+incompatible h1:RwGIia/vjSVRSJ/r4/Gfa+JIDjnWDPqWvtAXkdsF8tI=
 github.com/actgardner/gogen-avro v6.1.0+incompatible/go.mod h1:N2PzqZtS+5w9xxGp2daeykhWdTL0lBiRhbbvkVj4Yd8=
-github.com/alfredyang1986/blackmirror v0.1.2 h1:mzEIwlAS6tMTLJ61nkqawI7o4qLcCZ0iANY0Hi9Xpjk=
-github.com/alfredyang1986/blackmirror v0.1.2/go.mod h1:0xYt8TEuKtPKwS6jIh24PKT3BSyytCF9DSCihMSabzI=
+github.com/alfredyang1986/blackmirror v0.1.3 h1:YWMjDjYQOJy94oRfzGCh0cT2W9vzHXm5VeoaZFlFIAU=
+github.com/alfredyang1986/blackmirror v0.1.3/go.mod h1:0xYt8TEuKtPKwS6jIh24PKT3BSyytCF9DSCihMSabzI=
 github.com/aliyun/aliyun-oss-go-sdk v2.0.2+incompatible/go.mod h1:T/Aws4fEfogEE9v+HPhhw+CntffsBHJ8nXQCwKr0/g8=
 github.com/baiyubin/aliyun-sts-go-sdk v0.0.0-20180326062324-cfa1a18b161f/go.mod h1:AuiFmCCPBSrqvVMvuqFuk0qogytodnVFVSN5CeJB8Gc=
 github.com/confluentinc/confluent-kafka-go v1.1.0 h1:HIW7Nkm8IeKRotC34mGY06DwQMf9Mp9PZMyqDxid2wI=

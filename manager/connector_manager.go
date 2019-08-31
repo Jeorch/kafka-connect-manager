@@ -4,7 +4,9 @@ import (
 	"fmt"
 	"github.com/PharbersDeveloper/kafka-connect-manager/operations"
 	"github.com/PharbersDeveloper/kafka-connect-manager/storage"
+	"github.com/PharbersDeveloper/kafka-connect-manager/utils"
 	"github.com/alfredyang1986/blackmirror/bmlog"
+	"time"
 )
 
 type Manager struct {
@@ -66,6 +68,8 @@ func ResumeConnector(connector string, config string) (err error) {
 	if err != nil {
 		return
 	}
+	//TODO:改变配置后，需要等待一段时间才能启动
+	time.Sleep(5000 * time.Millisecond)
 	err = operations.SetStatus(connector, "resume")
 	return
 }
@@ -75,7 +79,24 @@ func ReleaseConnector(connector string) (err error) {
 	return
 }
 
-func (m *Manager) ReleaseJobConnectors(jobId string) (err error) {
+func (m *Manager) ReleaseJobConnectors(jobId string, connectors ...string) (err error) {
+
+	for _, connector := range connectors {
+		err = ReleaseConnector(connector)
+		if err != nil {
+			bmlog.StandardLogger().Warnf("%v", err)
+			bmlog.StandardLogger().Warnf("释放job=%s的管道%s失败，开始尝试删除管道并重建", jobId, connector)
+			err = RebuildConnector(connector)
+			if err != nil {
+				return
+			}
+		}
+		m.jobConnectors[jobId] = utils.RemoveSliceItem(m.jobConnectors[jobId], connector)
+	}
+	return
+}
+
+func (m *Manager) ReleaseJob(jobId string) (err error) {
 	if m.jobConnectors[jobId] == nil {
 		return fmt.Errorf("jobId=%s没有在ManageJobMap中找到", jobId)
 	}

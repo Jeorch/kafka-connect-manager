@@ -9,7 +9,10 @@
     "name": "Progress",
     "type": "long"
   }, {
-    "name": "Error",
+    "name": "Status",
+    "type": "string"
+  }, {
+    "name": "Message",
     "type": "string"
   }]
 }

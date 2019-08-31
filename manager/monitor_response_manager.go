@@ -8,6 +8,7 @@ import (
 	"github.com/elodina/go-avro"
 	kafkaAvro "github.com/elodina/go-kafka-avro"
 	"os"
+	"strings"
 )
 
 func (m *Manager) DealMonitorResponse() {
@@ -35,6 +36,7 @@ func (m *Manager) dealMonitorResponse2(a interface{}) {
 		bmlog.StandardLogger().Infof("MonitorResponse2 => %s", record)
 
 		jobId := record.Get("jobId").(string)
+
 		if m.jobConnectors[jobId] != nil {
 			progress := record.Get("progress").(int64)
 			connectorName := record.Get("connectorName").(string)
@@ -44,16 +46,23 @@ func (m *Manager) dealMonitorResponse2(a interface{}) {
 			case -1:
 				bmlog.StandardLogger().Infof("jobId=%s, progress=%d, connectorName=%s, error=%v", jobId, progress, connectorName, monitorError)
 				bmlog.StandardLogger().Info("monitor error")
+				go sendConnectResponse(jobId, progress, "ERROR", fmt.Sprintf("%v", monitorError))
+				err = m.ReleaseJob(jobId)
+				if err != nil {
+					bmlog.StandardLogger().Errorf("未能成功释放jobId=%s的管道，原因是=>%v", jobId, err)
+				}
 				bmlog.StandardLogger().Errorf("%v", monitorError)
 			case 100:
 				bmlog.StandardLogger().Infof("jobId=%s, progress=%d, connectorName=%s, error=%v", jobId, progress, connectorName, monitorError)
-				go sendConnectResponse(jobId, progress, fmt.Sprintf("%v", monitorError))
-				err = m.ReleaseJobConnectors(jobId)
+				go sendConnectResponse(jobId, progress, "FINISH", "succeed")
+				connectors := strings.Split(connectorName, "$$")
+				err = m.ReleaseJobConnectors(jobId, connectors...)
 				if err != nil {
 					bmlog.StandardLogger().Errorf("未能成功释放jobId=%s的管道，原因是=>%v", jobId, err)
 				}
 			default:
 				bmlog.StandardLogger().Infof("jobId=%s, progress=%d, connectorName=%s, error=%v", jobId, progress, connectorName, monitorError)
+				go sendConnectResponse(jobId, progress, "RUNNING", "")
 			}
 
 		}
@@ -63,7 +72,7 @@ func (m *Manager) dealMonitorResponse2(a interface{}) {
 
 func sendMonitorRequest2(jobId string, connectorName string, sourceTopic string, recallTopic string, strategy string) {
 
-	bmlog.StandardLogger().Info("*** sendMonitorRequest2 ***")
+	bmlog.StandardLogger().Infof("sendMonitorRequest2 jobId=%s, connectorName=%s, sourceTopic=%s, recallTopic=%s, strategy=%s", jobId, connectorName, sourceTopic, recallTopic, strategy)
 	var schemaRepositoryUrl = os.Getenv("BM_KAFKA_SCHEMA_REGISTRY_URL")
 	var rawMetricsSchema = `{"type": "record","name": "MonitorRequest2","namespace": "com.pharbers.kafka.schema","fields": [{"name": "jobId", "type": "string"},{"name": "connectorName", "type": "string"},{"name": "sourceTopic", "type": "string"},{"name": "recallTopic", "type": "string"},{"name": "strategy", "type": "string"}]}`
 
@@ -86,5 +95,7 @@ func sendMonitorRequest2(jobId string, connectorName string, sourceTopic string,
 	}
 	topic := "MonitorRequest2"
 	bkc.Produce(&topic, recordByteArr)
+
+	bmlog.StandardLogger().Infof("MonitorRequest2=%v", record)
 
 }

@@ -1,0 +1,23 @@
+{
+  "type": "record",
+  "name": "TmAggResponse",
+  "namespace": "com.pharbers.kafka.schema",
+  "fields": [
+    {
+      "name": "RequestId",
+      "type": "string"
+    },
+    {
+      "name": "JobId",
+      "type": "string"
+    },
+    {
+      "name": "Status",
+      "type": "string"
+    },
+    {
+      "name": "Message",
+      "type": "string"
+    }
+  ]
+}

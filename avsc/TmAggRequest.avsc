@@ -1,0 +1,35 @@
+{
+  "type": "record",
+  "name": "TmAggRequest",
+  "namespace": "com.pharbers.kafka.schema",
+  "fields": [
+    {
+      "name": "RequestId",
+      "type": "string"
+    },
+    {
+      "name": "JobId",
+      "type": "string"
+    },
+    {
+      "name": "ProposalId",
+      "type": "string"
+    },
+    {
+      "name": "ProjectId",
+      "type": "string"
+    },
+    {
+      "name": "PeriodId",
+      "type": "string"
+    },
+    {
+      "name": "Phase",
+      "type": "int"
+    },
+    {
+      "name": "Strategy",
+      "type": "string"
+    }
+  ]
+}
